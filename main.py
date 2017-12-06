@@ -70,9 +70,9 @@ class Main:
 			# Verifica colisão com as paredes
 			dead_organisms = pygame.sprite.groupcollide(self.organism_sprites, self.walls_sprites, False, False)
 			for dead in dead_organisms:
-				dead.stop_organism(kill=True)
+				dead.stop_organism(turn, -1)
 			for w in winners:
-				w.stop_organism(kill=False)
+				w.stop_organism(turn, 1)
 
 			# Para a movimentaçao dos organismos mortos e vencedores.
 			# print(dead_organisms)
@@ -114,14 +114,16 @@ class Main:
 		p1 = (0, 0)
 		p2 = (self.width, 0)
 		p3 = (0, self.height)
-		self.walls_sprites = pygame.sprite.Group()
-		# Linha horizontal
-		self.walls_sprites.add(Line(self.screen.get_size(), p1, p2, wide=10))
-		self.walls_sprites.add(Line(self.screen.get_size(), p1, p2, x=0, y=self.height-5, wide=10))
+		w = 10
 
-		# Linha vertical
-		self.walls_sprites.add(Line(self.screen.get_size(), p3, p1, wide=10))
-		self.walls_sprites.add(Line(self.screen.get_size(), p3, p1, x=self.width-5, y=0, wide=10))
+		self.walls_sprites = pygame.sprite.Group()
+		# Linhas horizontal
+		self.walls_sprites.add(Line(self.screen.get_size(), p1, p2, wide=w))
+		self.walls_sprites.add(Line(self.screen.get_size(), p1, p2, x=0, y=self.height-(w/2), wide=w))
+
+		# Linhas vertical
+		self.walls_sprites.add(Line(self.screen.get_size(), p3, p1, wide=w))
+		self.walls_sprites.add(Line(self.screen.get_size(), p3, p1, x=self.width-(w/2), y=0, wide=w))
 
 		# Carrega as paredes
 		self.walls_sprites.add(Wall(200, 0))
@@ -147,7 +149,7 @@ class Organism(pygame.sprite.Sprite):
 
 		# Movimentação
 		self.angle = 0
-		self.state = True
+		self.state = 0 # 0-Alive    negative-Dead Turn     positive-Number of turn to reach goal
 		# Posiçao inicial do organismo (base)
 		self.rect.move_ip(x, y)
 		self.rect.inflate_ip(-4,-4) # Encontrar valor bom ( tamanho da hitbox do organismo )
@@ -163,7 +165,7 @@ class Organism(pygame.sprite.Sprite):
 
 	# Funçao de movimento do organismo.
 	def move(self, turn):
-		if(self.state == True):
+		if(self.state == 0):
 			self.angle = self.angle + self.genome[turn]
 			xMove = int(2*math.cos(self.angle));
 			yMove = int(2*math.sin(self.angle));
@@ -180,11 +182,19 @@ class Organism(pygame.sprite.Sprite):
 		y = self.rect.y
 		dist = math.sqrt((x - pellet_x)**2 + (y - pellet_y)**2)
 
-		fitness = dist 
-		return fitness
+		score = (max_turn - dist) + 0.5 * (max_turn - self.fitness)
 
-	def stop_organism(self, kill):
-		self.state = False
+		if self.state > 0 :
+			score = 1.5 * (max_turn - dist) + 1.3 * (max_turn - state)
+		elif self.state < 0:
+			score = (max_turn-dist) + 0.5 * (max_turn - self.fitness) + 0.3 * (max_turn + state);
+
+		self.fitness = score
+
+		return self.fitness
+
+	def stop_organism(self, turn, signal):
+		self.state = turn*signal
 
 class Pellet(pygame.sprite.Sprite):
 	def __init__(self, color, width, x, y):
@@ -217,13 +227,11 @@ class Line(pygame.sprite.Sprite):
 	def __init__(self, size, p1, p2, x=0, y=0, wide=3):
 		# Construtor do pai.
 		super().__init__()
-		
-		# Cor de background transparente.
+
+		# Calculo da espessura da linha 
 		width = abs(p2[0] - p1[0]) if p2[0] - p1[0] != 0 else wide
 		height = abs(p2[1] - p1[1]) if p2[1] - p1[1] != 0 else wide
-
-		print(width)
-		print(height)
+		# Cor de background transparente.
 		self.image = pygame.Surface([width, height])
 		self.image.fill(WHITE)
 		self.image.set_colorkey(WHITE)
