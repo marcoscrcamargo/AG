@@ -165,11 +165,32 @@ class Organism(pygame.sprite.Sprite):
 		# Construtor do pai.
 		super().__init__()
 		
+		# AG
+		self.min_mutation = 0.0001;
+		self.max_mutation = 0.01;
+		self.mutation = (self.max_mutation - self.min_mutation) * np.random.random_sample() + self.min_mutation
+
 		# Cor de background transparente.
 		self.original_image = pygame.Surface([width, height])
 		self.original_image.fill(WHITE)
 		self.original_image.set_colorkey(WHITE)
  		
+		# Calculo da cor de acordo com a mutação
+		chunk = (self.max_mutation-self.min_mutation)/3
+		if(self.mutation < self.min_mutation + chunk):
+			b = 178/(1 - ((self.min_mutation + chunk)/self.min_mutation))
+			a = -b/self.min_mutation
+			color = (244, 66+(a*self.mutation+b), 66)
+		elif (self.mutation < self.min_mutation + 2*chunk):
+			b = 178/(1 - ((self.min_mutation + chunk)/(self.min_mutation + 2*chunk)))
+			a = -b/(self.min_mutation + 2*chunk)
+			color = (66+(a*self.mutation+b), 244, 66)
+		else:
+			b = 178/(1 - (self.max_mutation/(self.min_mutation + 2*chunk)))
+			a = -b/(self.min_mutation + 2*chunk)
+			color = (66, 244, 66 + (a*self.mutation+b))
+
+
 		# Desenhando o organismo (triangulo)
 		pygame.draw.polygon(self.original_image, color,  [[0, 0], [0, height],[width, height/2]], 0)
 		
@@ -189,10 +210,6 @@ class Organism(pygame.sprite.Sprite):
 
 		# AG
 		self.state = 0 # 0-Alive    negative-Dead Turn     positive-Number of turn to reach goal
-		self.min_mutation = 0.0001;
-		self.max_mutation = 0.01;
-
-		self.mutation = (self.max_mutation - self.min_mutation) * np.random.random_sample() + self.min_mutation
 		self.genome = np.random.uniform(low=-0.2, high=0.2, size=max_turn)
 		self.fitness = 0
 
