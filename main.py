@@ -16,18 +16,22 @@ if not pygame.mixer: print('Warning, sound disabled')
 
 # Cores.
 WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
+RED = (200, 50, 50)
+YELLOW = (200, 200, 50)
 BLACK = (0, 0, 0)
-BLUE = (0, 0, 255)
+BLUE = (50, 50, 200)
 
 WINDOW_TITLE = "Path finder AG"
-max_turn = 2000
+max_turn = 1000
 
 pellet_x = 900
 pellet_y = 344
 
-numOrganism = 10
+numOrganism = 100
+
+elitism = 0.05
+
+FPS = 60000
 
 def rot_center(image, angle):
 	"""rotate an image while keeping its center and size"""
@@ -54,13 +58,33 @@ class Main:
 		self.background = self.background.convert()
 		self.background.fill(BLUE)
 		turn = 0
+		deads = 0
 		clock = pygame.time.Clock()
 		while True:
-			turn = (turn + 1) % 2000
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					sys.exit()
 			
+
+			if (turn == max_turn or deads == numOrganism):
+				turn = 0
+				# Cria a próxima geração
+				# Calcula o fitness de cada organismo
+				for i in self.organism_list:
+					i.update_fitness()
+
+				# Ordena pelo fitness
+				self.organism_list.sort(key=lambda x: x.fitness, reverse=True)
+
+				# Iniciando elistimo
+				start = int(elitism*numOrganism)
+				for i in range(start, numOrganism):
+					# Cruzamento
+					self.organism_list[i].genome = child(self.organism_list[i % start].genome, self.organism_list[i].genome) 
+
+				for s in self.organism_sprites.sprites():
+					s.reset()
+
 			for s in self.organism_sprites.sprites():
 				s.move(turn)
 
@@ -73,6 +97,8 @@ class Main:
 				dead.stop_organism(turn, -1)
 			for w in winners:
 				w.stop_organism(turn, 1)
+
+			deads = len(dead_organisms) + len(winners)
 
 			# Para a movimentaçao dos organismos mortos e vencedores.
 			# print(dead_organisms)
@@ -96,8 +122,9 @@ class Main:
 			self.walls_sprites.draw(self.screen)
 			pygame.display.flip()
 
-			#Number of frames per secong e.g. 60
-			clock.tick(60)
+			# FPS
+			# clock.tick(FPS)
+			turn = (turn + 1)
 
 	def LoadSprites(self):
 		pellet_width = 64
@@ -107,8 +134,11 @@ class Main:
 
 		# Carrega os organismos.
 		self.organism_sprites = pygame.sprite.Group()
+		self.organism_list = list()
 		for i in range(numOrganism):
-			self.organism_sprites.add(Organism()) #Descobrir como definir o spectro de cores aqui xD
+			organism = Organism()
+			self.organism_sprites.add(organism)
+			self.organism_list.append(organism)
 
 		# Carrega os limites do cenário.
 		p1 = (0, 0)
@@ -149,12 +179,16 @@ class Organism(pygame.sprite.Sprite):
 
 		# Movimentação
 		self.angle = 0
-		self.state = 0 # 0-Alive    negative-Dead Turn     positive-Number of turn to reach goal
 		# Posiçao inicial do organismo (base)
 		self.rect.move_ip(x, y)
 		self.rect.inflate_ip(-4,-4) # Encontrar valor bom ( tamanho da hitbox do organismo )
-		
+		self.x = x
+		self.y = y
+
+
+
 		# AG
+		self.state = 0 # 0-Alive    negative-Dead Turn     positive-Number of turn to reach goal
 		self.min_mutation = 0.0001;
 		self.max_mutation = 0.01;
 
@@ -185,9 +219,9 @@ class Organism(pygame.sprite.Sprite):
 		score = (max_turn - dist) + 0.5 * (max_turn - self.fitness)
 
 		if self.state > 0 :
-			score = 1.5 * (max_turn - dist) + 1.3 * (max_turn - state)
+			score = 1.5 * (max_turn - dist) + 1.3 * (max_turn - self.state)
 		elif self.state < 0:
-			score = (max_turn-dist) + 0.5 * (max_turn - self.fitness) + 0.3 * (max_turn + state);
+			score = (max_turn-dist) + 0.5 * (max_turn - self.fitness) + 0.3 * (max_turn + self.state);
 
 		self.fitness = score
 
@@ -195,6 +229,22 @@ class Organism(pygame.sprite.Sprite):
 
 	def stop_organism(self, turn, signal):
 		self.state = turn*signal
+
+	def reset(self):
+		self.rect.move_ip(self.x - self.rect.x, self.y - self.rect.y );
+		self.state = 0
+		self.angle = 0
+
+
+def child(mom, dad):
+		child = np.random.uniform(low=0, high=1, size=max_turn)
+		for i in range(len(child)):
+			if(child[i] > 0.5):
+				child[i] = mom[i]
+			else:
+				child[i] = dad[i]
+
+		return child
 
 class Pellet(pygame.sprite.Sprite):
 	def __init__(self, color, width, x, y):
