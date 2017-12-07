@@ -9,7 +9,7 @@ import math
 from pygame.locals import *
 
 from helpers import *
-from random import randint
+import random
 
 if not pygame.font: print('Warning, fonts disabled')
 if not pygame.mixer: print('Warning, sound disabled')
@@ -22,16 +22,25 @@ BLACK = (0, 0, 0)
 BLUE = (50, 50, 200)
 
 WINDOW_TITLE = "Path finder AG"
+
+# Número máximo de turnos.
 max_turn = 1000
 
+# Posição da bolinha
 pellet_x = 900
 pellet_y = 344
 
 numOrganism = 100
 
-elitism = 0.05
+# Caracteristicas de mutação
+elitism = 0.1
+best_crossing = 0.2
+worst_crossing = 0.2
+death_rate = 0.05
 
-FPS = 60000
+gen = 0
+
+FPS = 0
 
 def rot_center(image, angle):
 	"""rotate an image while keeping its center and size"""
@@ -68,6 +77,9 @@ class Main:
 
 			if (turn == max_turn or deads == numOrganism):
 				turn = 0
+				global gen
+				gen = gen + 1
+				print("Geraçao %d" % gen)
 				# Cria a próxima geração
 				# Calcula o fitness de cada organismo
 				for i in self.organism_list:
@@ -75,13 +87,48 @@ class Main:
 
 				# Ordena pelo fitness
 				self.organism_list.sort(key=lambda x: x.fitness, reverse=True)
+				for i in range (0, 10):
+					print("\t score: %.2f" % self.organism_list[i].fitness)
 
 				# Iniciando elistimo
-				start = int(elitism*numOrganism)
-				for i in range(start, numOrganism):
-					# Cruzamento
-					self.organism_list[i].genome = child(self.organism_list[i % start].genome, self.organism_list[i].genome) 
+				elite = int(elitism*numOrganism)
 
+				for i in range(elite, numOrganism):
+					rand = random.random()
+					if rand < death_rate:
+						# Mortes de alguns organismos.
+						self.organism_list[i].gen_genome()
+					else :
+						b = int(best_crossing*numOrganism)
+						w = int(worst_crossing*numOrganism)
+						count = 0
+						if count < w:
+							# Cruzamento entre os melhores e piores.
+							self.organism_list[i].child(self.organism_list[i],
+							 self.organism_list[(numOrganism - i)]) 
+							count = count + 1
+						elif count < b + w:
+							# Cruzamento entre os melhores.
+							self.organism_list[i].child(self.organism_list[i % elite],
+							 self.organism_list[i % elite]) 
+							count = count + 1
+						else :
+							# Cruzamento por torneio.
+							# Escolha da mãe
+							o1 = random.randint(0, numOrganism-1)
+							o2 = random.randint(0, numOrganism-1)
+							mon = o2
+							if self.organism_list[o1].fitness > self.organism_list[o2].fitness:
+								mon = o1
+							# Escolha do pai
+							o1 = random.randint(0, numOrganism-1)
+							o2 = random.randint(0, numOrganism-1)
+							dad = o2
+							if self.organism_list[o1].fitness > self.organism_list[o2].fitness:
+								dad = o1
+
+							self.organism_list[i].child(self.organism_list[mon],
+							 self.organism_list[dad])
 				for s in self.organism_sprites.sprites():
 					s.reset()
 
@@ -101,7 +148,6 @@ class Main:
 			deads = len(dead_organisms) + len(winners)
 
 			# Para a movimentaçao dos organismos mortos e vencedores.
-			# print(dead_organisms)
 			# Contador de comidas
 			# self.organism.pellets = self.organism.pellets + len(lstCols)
 						
@@ -122,9 +168,10 @@ class Main:
 			self.walls_sprites.draw(self.screen)
 			pygame.display.flip()
 
-			# FPS
-			# clock.tick(FPS)
 			turn = (turn + 1)
+			# FPS
+			if(FPS > 0):
+				clock.tick(FPS)
 
 	def LoadSprites(self):
 		pellet_width = 64
@@ -252,16 +299,29 @@ class Organism(pygame.sprite.Sprite):
 		self.state = 0
 		self.angle = 0
 
+	def gen_genome(self):
+		self.genome = np.random.uniform(low=-0.2, high=0.2, size=max_turn)
 
-def child(mom, dad):
-		child = np.random.uniform(low=0, high=1, size=max_turn)
-		for i in range(len(child)):
-			if(child[i] > 0.5):
-				child[i] = mom[i]
+
+	def child(self, mom, dad):
+		for i in range(abs(dad.state)):
+			# Cruzamento
+			rand = random.random()
+			if(rand < 0.5):
+				self.genome[i] = mom.genome[i]
 			else:
-				child[i] = dad[i]
+				self.genome[i] = dad.genome[i]
 
-		return child
+			# Mutação.
+			rand = random.random()
+			if(rand < self.mutation):
+				self.genome[i] = random.uniform(-0.2, 0.2)
+
+		# Parte "morta" do gene.
+		for i in range(abs(dad.state) + 1, max_turn):
+			self.genome[i] = random.uniform(-0.2, 0.2)
+
+
 
 class Pellet(pygame.sprite.Sprite):
 	def __init__(self, color, width, x, y):
