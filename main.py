@@ -8,7 +8,6 @@ import math
 
 from pygame.locals import *
 
-from helpers import *
 import random
 
 if not pygame.font: print('Warning, fonts disabled')
@@ -245,8 +244,19 @@ class Main:
 		# Carrega os obstaculos
 		# Isso precisa ser melhorado.
 		self.walls_sprites.add(Wall(200, 0))
-		self.walls_sprites.add(Wall(300, 344))
-		self.walls_sprites.add(Wall(200, 664))
+		self.walls_sprites.add(Wall(200, 100))
+		self.walls_sprites.add(Wall(200, 200))
+		self.walls_sprites.add(Wall(200, 300))
+
+		self.walls_sprites.add(Wall(500, 400))
+		self.walls_sprites.add(Wall(500, 500))
+		self.walls_sprites.add(Wall(500, 600))
+
+		self.walls_sprites.add(Wall(800, 0))
+		self.walls_sprites.add(Wall(800, 100))
+		self.walls_sprites.add(Wall(800, 200))
+		self.walls_sprites.add(Wall(800, 300))
+		self.walls_sprites.add(Wall(800, 400))
 
 
 
@@ -297,7 +307,7 @@ class Organism(pygame.sprite.Sprite):
 		self.rect.move_ip(self.x, self.y)
 
 		# tamanho da hitbox
-		self.rect.inflate_ip(-4,-4) # Encontrar valor bom ( tamanho da hitbox do organismo )
+		self.rect.inflate_ip(-5,-5) # Encontrar valor bom ( tamanho da hitbox do organismo )
 
 		# AG
 		self.state = 0 # 0 - Continua vivo    negative - Turno de morte     positive - Turno em que chega ao objetivo.
@@ -311,12 +321,12 @@ class Organism(pygame.sprite.Sprite):
 			# Novo angulo
 			self.angle = self.angle + self.genome[turn]
 			# Calculo do x,y
-			xMove = int(2*math.cos(self.angle))
-			yMove = int(2*math.sin(self.angle))
+			xMove = int(5*math.cos(self.angle))
+			yMove = int(5*math.sin(self.angle))
 
 			# Realiza movimento e a rotação do objeto.
 			self.rect.move_ip(xMove, yMove)
-			self.image = rot_center(self.original_image, math.degrees(self.angle))
+			self.image = rot_center(self.original_image, -math.degrees(self.angle))
 
 
 	# Função que calcula o fitness de cada organismo
@@ -405,25 +415,37 @@ class Pellet(pygame.sprite.Sprite):
 
 # Classe dos obstaculos (Parede)
 class Wall(pygame.sprite.Sprite):
-''' 
-	Essa classe deve ser melhorada para suportar melhor os obstaculos
-		(ou desenhar melhor as imagens, ou fazer por meio do pygame (igual os outros objetos))
+#
+# 	Essa classe deve ser melhorada para suportar melhor os obstaculos
+# 		(ou desenhar melhor as imagens, ou fazer por meio do pygame (igual os outros objetos))
 
-	Também deve ser adicionadas mais instâncias dessa classe na função LoadSprites, 
-		para dificultar o movimento dos organismos.
-'''
+# 	Também deve ser adicionadas mais instâncias dessa classe na função LoadSprites, 
+# 		para dificultar o movimento dos organismos.
+#
 
 	# Construtor
-	def __init__(self, x, y):
+	def __init__(self, x, y, angle = 0, color = RED, width = 50, height = 200):
 		# Construtor do pai.
 		super().__init__()
 
 		# Carrega a imagem do arquivo.
-		self.image, self.rect = load_image('wall.png', -1)
+		# self.original_image, self.original_rect = load_image('wall.png', -1)
+		
+		# Cor de background transparente.
+		self.original_image = pygame.Surface([width, height])
+		self.original_image.fill(WHITE)
+		self.original_image.set_colorkey(WHITE)
+ 		
+		# Desenhando o organismo (triangulo)
+		pygame.draw.polygon(self.original_image, color,  [[0, 0], [0, height],[width, height], [width, 0]], 0)
+		
+		# Retangulo com as mesmas dimensões da imagem.
+		self.rect = self.original_image.get_rect()
+		self.image = self.original_image # Original image é usado para as transformações
 
 
-		# if rect != None:
-		# 	self.rect = rect
+		self.image = rot_center(self.original_image, -math.degrees(angle))
+
 		self.rect.move_ip(x, y)
 
 # Linhas que representam as bordas do espaço.
