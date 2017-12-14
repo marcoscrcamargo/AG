@@ -1,76 +1,76 @@
-#! /usr/bin/env python
+#!/usr/bin/env python
 
-import os, sys
-import pygame
-import time
-import numpy as np
-import math
-
-from pygame.locals import *
-
-import random
-
-if not pygame.font: print('Warning, fonts disabled')
-if not pygame.mixer: print('Warning, sound disabled')
+import sys, math, random, pygame
 
 # Cores.
-WHITE = (255, 255, 255)
-RED = (200, 50, 50)
-YELLOW = (200, 200, 50)
 BLACK = (0, 0, 0)
-BLUE = (50, 50, 200)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+PINK = (255, 0, 255)
+CYAN = (0, 255, 255)
+WHITE = (255, 255, 255)
 
-# Titulo da janela
-WINDOW_TITLE = "Path finder AG"
+# Título da janela.
+SCREEN_TITLE = "Path finder Genetic Algorithm"
+
+# Dimensões da janela.
+SCREEN_WIDTH = 1800
+SCREEN_HEIGHT = 1000
+
+# Grossura da borda da janela.
+BORDER_WIDTH = 1
 
 # Número máximo de turnos.
-max_turn = 1500
+MAX_TURNS = 1500
+
+# Constantes
+DEAD = -1
+ALIVE = 0
+WINNER = 1
+POPULATION_SIZE = 200
+ELITE_SIZE = 5
+MIN_MUTATION = 0.001
+MAX_MUTATION = 0.1
+MAX_TURN = 0.25
 
 # Posição da bolinha
-pellet_x = 900
-pellet_y = 344
+PELLET_X = 1700
+PELLET_Y = SCREEN_HEIGHT // 2
+PELLET_RADIUS = 32
 
-# Número maximo de organismos
-numOrganism = 300
+# Posição inicial dos organismos
+INITIAL_X = 100
+INITIAL_Y = SCREEN_HEIGHT // 2
 
-# Caracteristicas de cruzamento (mutação)
-elitism = 0.01
-best_crossing = 0.2
-worst_crossing = 0.2
-death_rate = 0.05
-
-# Geração atual
-gen = 0
+CHANCE_TO_RESET_GENOME = 0.02
+CHANCE_TO_MUTATE_AT_DEATH = 0.25
+CHANCE_TO_MUTATE_AT_MIN_DIST = 0.25
 
 # FPS (acaba sendo limitado pelo poder de processamento do PC)
 FPS = 0 # 0 é pra ignorar
 
-# Função que roda uma imagem. 
-# (Não coloquei no organism, pq talvez as outras classes precisem usar)
-#  seria uma boa colocar depois.
-def rot_center(image, angle):
-	"""rotate an image while keeping its center and size"""
-	orig_rect = image.get_rect()
-	rot_image = pygame.transform.rotate(image, angle)
-	rot_rect = orig_rect.copy()
-	rot_rect.center = rot_image.get_rect().center
-	# rot_image = rot_image.subsurface(rot_rect).copy()
-	return rot_image
+# Cor de acordo com a taxa de mutação.
+def get_color(mutation):
+	return (((mutation - MIN_MUTATION) / (MAX_MUTATION - MIN_MUTATION)) * 255 , 0, 0)
+
+# Cálculo da distância ao quadrado.
+def distance(p, q):
+	return (p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1])
 
 # Classe principal
 class Main:
 	# Construtor, inicializa a tela
-	def __init__(self, width=1024, height=768):
+	def __init__(self):
 		# Pygame init
 		pygame.init()
 
-		# Titulo da tela
-		pygame.display.set_caption(WINDOW_TITLE)
+		# Definindo o título da janela.
+		pygame.display.set_caption(SCREEN_TITLE)
 
-		# Dimensões da janela
-		self.width = width
-		self.height = height
-		self.screen = pygame.display.set_mode((self.width, self.height))
+		# Definindo as dimensões da janela.
+		self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 	def MainLoop(self):
 		# Carrega os objetos da cena.
@@ -79,88 +79,50 @@ class Main:
 		# Criando o background. 
 		self.background = pygame.Surface(self.screen.get_size())
 		self.background = self.background.convert()
-		self.background.fill(BLUE) # Escolhi azul, mas pode mudar
+		self.background.fill((100, 100, 100))
 
 		# Variaveis auxiliares
-		turn = 0 # Turno atual.
-		deads = 0 # Quantidade de organismos mortos.
+		self.gen = 0
+		self.turn = 0 # Turno atual.
+		self.deads = 0 # Quantidade de organismos mortos.
 		clock = pygame.time.Clock() # Para controlar o FPS
+
+		dead_organisms = {}
+		winner_organisms = {}
 
 		# GameLoop
 		while True:
+			# Para sair.
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					sys.exit()
 			
-			# Verifica se acabou a geraçao atual (max_turn atingido ou todos organismos parados)
-			if (turn == max_turn or deads == numOrganism):
-				# Reseta os turnos
-				turn = 0
-
-				# Incrementa a geração
-				global gen
-				gen = gen + 1
+			# Verifica se acabou a geraçao atual (MAX_TURNS atingido ou todos organismos parados)
+			if self.turn == MAX_TURNS or len(dead_organisms) + len(winner_organisms) == POPULATION_SIZE:
+				# Reseta os turnos e incrementa a geração
+				self.turn = 0
+				self.gen += 1
 
 				# Calcula o fitness de cada organismo
 				for i in self.organism_list:
 					i.update_fitness()
 
-				# Ordena pelo fitness (Reverso, quanto maior melhor)
+				# Ordena decrescente pelo fitness
 				self.organism_list.sort(key=lambda x: x.fitness, reverse=True)
 
 				# Imprime a geração atual e o rank com os 10 melhores fitness.
-				print("Geraçao %d" % gen)
+				print(distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y)))
+
+				print("Gen.: %d" % self.gen)
 				for i in range (0, 10):
-					print("\t score: %.2f" % self.organism_list[i].fitness)
+					print("\t%d) fitness = %.2f" % (i + 1, self.organism_list[i].fitness))
 
-				# Calcula a elite da população e não mata ela.
-				elite = int(elitism*numOrganism)
+				# Gera toda a população usando apenas a elite.
+				for i in range(ELITE_SIZE, POPULATION_SIZE):
+					p1 = random.randint(0, ELITE_SIZE - 1)
+					p2 = random.randint(0, ELITE_SIZE - 1)
 
-				# Criação da próxima geração.
-
-				# Gera toda a populaçao utilizando os dois melhores.
-				for i in range (elite, numOrganism):
-					self.organism_list[i].child(self.organism_list[0], self.organism_list[1])
-
-
-				# Gera a população com base em vários critérios.
-				# for i in range(elite, numOrganism):
-				# 	rand = random.random()
-
-				# 	# Mata aleatóriamente alguns organismos.
-				# 	if rand < death_rate:
-				# 		self.organism_list[i].gen_genome()
-				# 	else :
-				# 		b = int(best_crossing*numOrganism)
-				# 		w = int(worst_crossing*numOrganism)
-				# 		count = 0
-				# 		if count < w:
-				# 			# Cruzamento entre os melhores e piores.
-				# 			self.organism_list[i].child(self.organism_list[i],
-				# 			 self.organism_list[(numOrganism - i-1)]) 
-				# 			count = count + 1
-				# 		elif count < b + w:
-				# 			# Cruzamento entre os melhores.
-				# 			self.organism_list[i].child(self.organism_list[i % elite],
-				# 			 self.organism_list[i % elite]) 
-				# 			count = count + 1
-				# 		else :
-				# 			# Cruzamento por torneio.
-				# 			# Escolha da mãe
-				# 			o1 = random.randint(0, numOrganism-1)
-				# 			o2 = random.randint(0, numOrganism-1)
-				# 			mon = o2
-				# 			if self.organism_list[o1].fitness > self.organism_list[o2].fitness:
-				# 				mon = o1
-				# 			# Escolha do pai
-				# 			o1 = random.randint(0, numOrganism-1)
-				# 			o2 = random.randint(0, numOrganism-1)
-				# 			dad = o2
-				# 			if self.organism_list[o1].fitness > self.organism_list[o2].fitness:
-				# 				dad = o1
-
-				# 			self.organism_list[i].child(self.organism_list[mon],
-				# 			 self.organism_list[dad])
+					self.organism_list[i].make_child(self.organism_list[p1], self.organism_list[p2])
 
 				# Reseta os organismos para o estado inicial.
 				for s in self.organism_sprites.sprites():
@@ -168,24 +130,20 @@ class Main:
 
 			# Realiza os movimentos dos organismos.
 			for s in self.organism_sprites.sprites():
-				s.move(turn)
+				s.move(self.turn)
 
 			# Verifica colisão com a bolinha 
-			winners = pygame.sprite.spritecollide(self.pellet, self.organism_sprites, False)
+			winner_organisms = pygame.sprite.spritecollide(self.pellet, self.organism_sprites, False)
 
 			# Verifica colisão com as paredes
-			dead_organisms = pygame.sprite.groupcollide(self.organism_sprites, self.walls_sprites, False, False)
-
+			dead_organisms = pygame.sprite.groupcollide(self.organism_sprites, self.wall_sprites, False, False)
 
 			# Para a movimentaçao dos organismos mortos e vencedores.
 			for dead in dead_organisms:
-				dead.stop_organism(turn, -1)
-			for w in winners:
-				w.stop_organism(turn, 1)
+				dead.state = DEAD
 
-			# Conta a quantidade de organismos mortos e vencedores.
-			deads = len(dead_organisms) + len(winners)
-
+			for winner in winner_organisms:
+				winner.state = WINNER
 
 			# Desenha background.
 			self.screen.blit(self.background, (0, 0))
@@ -193,285 +151,248 @@ class Main:
 			# Desenha os sprites
 			self.pellet_sprites.draw(self.screen)
 			self.organism_sprites.draw(self.screen)
-			self.walls_sprites.draw(self.screen)
+			self.wall_sprites.draw(self.screen)
 			pygame.display.flip()
 
 			# Incremento do turno atual.
-			turn = (turn + 1)
+			self.turn += 1
 
 			# FPS
 			if(FPS > 0):
 				clock.tick(FPS)
 
 	def LoadSprites(self):
-		# Tamanho da bola
-		pellet_width = 64
-		# Carrega a Bola de destino.
-		self.pellet = Pellet(YELLOW, pellet_width, pellet_x, pellet_y)
-		# Adiciona a bola ao conjunto de sprites
+		# Gerando o objetivo.
+		self.pellet = Pellet(PELLET_X, PELLET_Y, PELLET_RADIUS)
+
+		# Adiciona o objetivo ao conjunto de sprites.
 		self.pellet_sprites = pygame.sprite.RenderPlain(self.pellet)
 
-		# Carrega os organismos.
+		# Cria um grupo de organismos.
 		self.organism_sprites = pygame.sprite.Group()
-		# Lista com os organismos (para ordenação)
-		self.organism_list = list()
-		# Gera cada organismo
-		for i in range(numOrganism):
-			organism = Organism()
-			# Adiciona ao conjunto de sprites.
-			self.organism_sprites.add(organism)
-			# Adiciona a lista de organismos.
-			self.organism_list.append(organism)
 
-		# Carrega os limites do cenário.
-		# Pontos para a contrução da borda 
-		p1 = (0, 0)
-		p2 = (self.width, 0)
-		p3 = (0, self.height)
-		w = 10 # Wide da linha da borda
+		# Lista com os organismos.
+		self.organism_list = [Organism(random.uniform(MIN_MUTATION, MAX_MUTATION)) for i in range(POPULATION_SIZE)]
 
-		# Desenha as bordas
-		self.walls_sprites = pygame.sprite.Group()
+		# Gerando cada organismo.
+		for i in self.organism_list:
+			self.organism_sprites.add(i)
 
-		# Linhas horizontal
-		self.walls_sprites.add(Line(self.screen.get_size(), p1, p2, wide=w))
-		self.walls_sprites.add(Line(self.screen.get_size(), p1, p2, x=0, y=self.height-(w/2), wide=w))
+		# Desenha as bordas.
+		self.wall_sprites = pygame.sprite.Group()
 
-		# Linhas vertical
-		self.walls_sprites.add(Line(self.screen.get_size(), p3, p1, wide=w))
-		self.walls_sprites.add(Line(self.screen.get_size(), p3, p1, x=self.width-(w/2), y=0, wide=w))
+		# Upper border.
+		self.wall_sprites.add(Wall(0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH, BLACK))
+
+		# Lower border.
+		self.wall_sprites.add(Wall(0, SCREEN_HEIGHT - BORDER_WIDTH, 0, SCREEN_WIDTH, BORDER_WIDTH, BLACK))
+
+		# Left border.
+		self.wall_sprites.add(Wall(0, 0, 0, BORDER_WIDTH, SCREEN_HEIGHT, BLACK))
+
+		# Right border.
+		self.wall_sprites.add(Wall(SCREEN_WIDTH - BORDER_WIDTH, 0, 0, BORDER_WIDTH, SCREEN_HEIGHT, BLACK))
 
 		# Carrega os obstaculos
-		# Isso precisa ser melhorado.
-		self.walls_sprites.add(Wall(200, 0))
-		self.walls_sprites.add(Wall(200, 100))
-		self.walls_sprites.add(Wall(200, 200))
-		self.walls_sprites.add(Wall(200, 300))
 
-		self.walls_sprites.add(Wall(500, 400))
-		self.walls_sprites.add(Wall(500, 500))
-		self.walls_sprites.add(Wall(500, 600))
+		# self.randomize_map()
 
-		self.walls_sprites.add(Wall(800, 0))
-		self.walls_sprites.add(Wall(800, 100))
-		self.walls_sprites.add(Wall(800, 200))
-		self.walls_sprites.add(Wall(800, 300))
-		self.walls_sprites.add(Wall(800, 400))
+		self.wall_sprites.add(Wall(300, 100, 0, 50, SCREEN_HEIGHT - 200))
 
+		self.wall_sprites.add(Wall(500, 0, 0, 50, 400))
+		self.wall_sprites.add(Wall(500, SCREEN_HEIGHT - 400, 0, 50, 400))
 
+		self.wall_sprites.add(Wall(700, 100, 0, 50, SCREEN_HEIGHT - 200))
 
+		self.wall_sprites.add(Wall(900, 0, 0, 50, 400))
+		self.wall_sprites.add(Wall(900, SCREEN_HEIGHT - 400, 0, 50, 400))
+
+		self.wall_sprites.add(Wall(1100, 100, 0, 50, SCREEN_HEIGHT - 200))
+
+	def randomize_map(self):
+		pos_x = [i for i in range(200, SCREEN_WIDTH + 1, 200)]
+		pos_y = [i for i in range(0, SCREEN_HEIGHT - 200 + 1, 200)]
+
+		PELLET_X = random.randrange(700, 1700 + 1, 200)
+		PELLET_Y = random.randrange(100, 900 + 1, 100)
+
+		for i in pos_x:
+			k = 0
+
+			for j in pos_y:
+				if random.random() < 0.5 and k < len(pos_y) - 1:
+					k += 1
+					self.wall_sprites.add(Wall(i, j, 0, 50, 200))
+					
 # Classe do organismo (triangulo)
 class Organism(pygame.sprite.Sprite):
 	# Construtor
-	def __init__(self, color=RED, width=30, height=15, x=64, y=344):
+	def __init__(self, mutation):
 		# Construtor do pai.
 		super().__init__()
-		
-		# AG
-		self.min_mutation = 0.0001;
-		self.max_mutation = 0.1;
-		self.mutation = (self.max_mutation - self.min_mutation) * np.random.random_sample() + self.min_mutation
+
+		# Atributos do organismo.
+		self.x = INITIAL_X
+		self.y = INITIAL_Y
+		self.angle = random.uniform(-math.pi, math.pi)
+		self.width = 32
+		self.height = 16
+		self.mutation = mutation
+		self.state = ALIVE
+		self.genome = [random.uniform(-MAX_TURN, MAX_TURN) for i in range(MAX_TURNS)]
+		self.fitness = 0
 
 		# Cor de background transparente.
-		self.original_image = pygame.Surface([width, height])
+		self.original_image = pygame.Surface([self.width, self.height])
 		self.original_image.fill(WHITE)
 		self.original_image.set_colorkey(WHITE)
  		
 		# Calculo da cor de acordo com a mutação
-		chunk = (self.max_mutation-self.min_mutation)/3
-		if(self.mutation < self.min_mutation + chunk):
-			b = 178/(1 - ((self.min_mutation + chunk)/self.min_mutation))
-			a = -b/self.min_mutation
-			color = (244, 66+(a*self.mutation+b), 66)
-		elif (self.mutation < self.min_mutation + 2*chunk):
-			b = 178/(1 - ((self.min_mutation + chunk)/(self.min_mutation + 2*chunk)))
-			a = -b/(self.min_mutation + 2*chunk)
-			color = (66+(a*self.mutation+b), 244, 66)
-		else:
-			b = 178/(1 - (self.max_mutation/(self.min_mutation + 2*chunk)))
-			a = -b/(self.min_mutation + 2*chunk)
-			color = (66, 244, 66 + (a*self.mutation+b))
+		self.color = get_color(mutation)
 
-		# Desenhando o organismo (triangulo)
-		pygame.draw.polygon(self.original_image, color,  [[0, 0], [0, height],[width, height/2]], 0)
+		# Desenhando o organismo.
+		pygame.draw.polygon(self.original_image, self.color, [(0, 0), (0, self.height), (self.width, self.height // 2)])
 		
-		# Retangulo com as mesmas dimensões da imagem.
+		# Retângulo com as mesmas dimensões da imagem.
 		self.rect = self.original_image.get_rect()
 		self.image = self.original_image # Original image é usado para as transformações
 
-		# Movimentação
-		self.angle = 0
-		# Posiçao inicial do organismo (base)
-		self.x = x
-		self.y = y
+		# Movendo para a posição inicial.
 		self.rect.move_ip(self.x, self.y)
 
-		# tamanho da hitbox
-		self.rect.inflate_ip(-5,-5) # Encontrar valor bom ( tamanho da hitbox do organismo )
+		# Tamanho da hitbox.
+		self.rect.inflate_ip(-5, -5)
 
-		# AG
-		self.state = 0 # 0 - Continua vivo    negative - Turno de morte     positive - Turno em que chega ao objetivo.
-		self.genome = np.random.uniform(low=-0.2, high=0.2, size=max_turn)
-		self.fitness = 0
-
+		# Métricas
+		self.dist = self.min_dist = distance((self.rect.x, self.rect.y), (PELLET_X, PELLET_Y))
+		self.time_to_dist = self.time_to_min_dist = -1
 
 	# Funçao de movimento do organismo.
 	def move(self, turn):
-		if(self.state == 0):
-			# Novo angulo
-			self.angle = self.angle + self.genome[turn]
+		if self.state == ALIVE:
+			# Atualizando a distância atual
+			self.dist = distance((self.rect.x, self.rect.y), (PELLET_X, PELLET_Y))
+			self.time_to_dist = turn
+
+			# Atualizando a distância mínima
+			if self.dist < self.min_dist:
+				self.min_dist = self.dist
+				self.time_to_min_dist = self.time_to_dist
+
+			# Novo ângulo.
+			self.angle += self.genome[turn]
+
 			# Calculo do x,y
-			xMove = int(5*math.cos(self.angle))
-			yMove = int(5*math.sin(self.angle))
+			xMove = int(5 * math.cos(self.angle))
+			yMove = int(5 * math.sin(self.angle))
 
 			# Realiza movimento e a rotação do objeto.
 			self.rect.move_ip(xMove, yMove)
-			self.image = rot_center(self.original_image, -math.degrees(self.angle))
-
+			self.image = pygame.transform.rotate(self.original_image, -math.degrees(self.angle))
 
 	# Função que calcula o fitness de cada organismo
 	def update_fitness(self):
-		# score = 1*(max_turn-final_distance)+0.5*(max_turn-closest_distance)+1*(1000-goal_turn)+0.3*(1000-last_of_dead_or_goal_turn)
+		# O fitness inicial é a distância inicial
+		self.fitness = distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y))
 
-		x = self.rect.x
-		y = self.rect.y
-		dist = math.sqrt((x - pellet_x)**2 + (y - pellet_y)**2)
+		# Bônus caso tenha alcançado o objetivo
+		if self.state == WINNER:
+			self.fitness *= (2 - self.time_to_min_dist / MAX_TURNS)
+		else:
+			a1 = 2
+			a2 = 3
+			a3 = 2
 
-		# Se continua vivo e não parou.
-				# #Turnos - distancia + 0.5 (#Turnos - Fitness anterior)
-		score = (max_turn - dist) + 0.5 * (max_turn - self.fitness)
+			p1 = 1 - self.min_dist / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y))
+			p2 = 1 - self.dist / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y))
+			p3 = self.time_to_dist / MAX_TURNS
 
-		# Se chegou ao objetivo.
-		if self.state > 0 :
-					# 1.5 * (#Turnos - dist) + 1.3 * (#Turnos - turno que chegou )
-			score = 1.5 * (max_turn - dist) + 1.3 * (max_turn - self.state)
-		# Se morrreu.
-		elif self.state < 0:
-					# (#Turnos - distancia) + 0.5 * (#Turnos - fitness anterior) + 0.3 * (#Turnos - turno que morreu )
-			score = (max_turn - dist) + 0.5 * (max_turn - self.fitness) + 0.3 * (max_turn + self.state);
-
-		self.fitness = score
-
-		return self.fitness
-
-	# Mata o organismo, faz ele parar de realizar os movimentos
-	# signal deve ser 1 ou -1 para indicar se está vivo ou morto, respectivamente.
-	def stop_organism(self, turn, signal):
-		self.state = turn*signal
+			self.fitness *= (a1 * p1 + a2 * p2 + a3 * p3) / (a1 + a2 + a3)
 
 	# Volta o organismo para a posição original, estado e angulo
 	def reset(self):
-		self.rect.move_ip(self.x - self.rect.x, self.y - self.rect.y );
-		self.state = 0
+		self.rect.move_ip(self.x - self.rect.x, self.y - self.rect.y);
+		self.state = ALIVE
 		self.angle = 0
 
-	# Gera um genoma aleatório para o organismo.
-	def gen_genome(self):
-		self.genome = np.random.uniform(low=-0.2, high=0.2, size=max_turn)
-
-
 	# Realiza o cruzamento entre dois organismos e salva no atual
-	def child(self, mom, dad):
-		for i in range(abs(dad.state)):
-			# Cruzamento
-			# Escolhe o organismo do pai ou da mãe
-			rand = random.random()
-			if(rand < 0.5):
-				self.genome[i] = mom.genome[i]
+	def make_child(self, mom, dad):
+		if random.random() < CHANCE_TO_RESET_GENOME:
+			self.genome = [random.uniform(-MAX_TURN, MAX_TURN) for i in range(MAX_TURNS)]
+		else:
+			self.genome = [dad.genome[i] if random.random() < 0.5 else mom.genome[i] for i in range(MAX_TURNS)]
+
+			if random.random() < CHANCE_TO_MUTATE_AT_DEATH:
+				s = max(0, min(mom.time_to_dist, dad.time_to_dist) - 10)
+			elif random.random() < CHANCE_TO_MUTATE_AT_MIN_DIST:
+				s = max(0, max(mom.time_to_min_dist, dad.time_to_min_dist) - 10)
 			else:
-				self.genome[i] = dad.genome[i]
+				s = 0
 
-			# Mutação.
-			rand = random.random()
-			if(rand < self.mutation):
-				self.genome[i] = random.uniform(-0.2, 0.2)
+			# Mutação
+			for i in range(s, MAX_TURNS):
+				if random.random() < self.mutation * (1 + i / MAX_TURNS):
+					self.genome[i] += random.uniform(-MAX_TURN, MAX_TURN)
+					self.genome[i] = max(self.genome[i], -MAX_TURN)
+					self.genome[i] = min(self.genome[i], MAX_TURN)
 
-		# Copia parte do gene do pai que não foi utilizada.
-		for i in range(abs(dad.state) + 1, max_turn):
-			self.genome[i] = random.uniform(-0.2, 0.2)
-
-# Classe da bolinha de destino.
+# Objetivo
 class Pellet(pygame.sprite.Sprite):
 	# Construtor.
-	def __init__(self, color, width, x, y):
+	def __init__(self, x, y, radius = 32, color = YELLOW):
 		# Construtor do pai.
 		super().__init__()
+
+		# Atributos do objetivo.
+		self.x = x
+		self.y = y
+		self.radius = radius
+		self.color = color
 		
-		# Cor de background transparente.
-		self.image = pygame.Surface([width, width])
+		# Cor do background.
+		self.image = pygame.Surface((2 * self.radius, 2 * self.radius))
 		self.image.fill(WHITE)
 		self.image.set_colorkey(WHITE)
  
-		# Desenhando a bolinha
-		pygame.draw.circle(self.image, color, (width//2, width//2), width//2, 0)
+		# Desenhando o objetivo.
+		pygame.draw.circle(self.image, self.color, (self.radius, self.radius), self.radius)
 
-		# Retangulo com as mesmas dimensões da imagem.
+		# Retângulo com as mesmas dimensões da imagem.
 		self.rect = self.image.get_rect()
-		
-		# Movimenta para a posiçao inicial
-		self.x = x
-		self.y = y
+
+		# Diminuindo a hitbox.
+		# self.rect.inflate_ip(-10, -10)	
+
+		# Movendo para a posição inicial.
 		self.rect.move_ip(self.x, self.y)
 
-# Classe dos obstaculos (Parede)
+# Paredes
 class Wall(pygame.sprite.Sprite):
-#
-# 	Essa classe deve ser melhorada para suportar melhor os obstaculos
-# 		(ou desenhar melhor as imagens, ou fazer por meio do pygame (igual os outros objetos))
-
-# 	Também deve ser adicionadas mais instâncias dessa classe na função LoadSprites, 
-# 		para dificultar o movimento dos organismos.
-#
-
-	# Construtor
-	def __init__(self, x, y, angle = 0, color = RED, width = 50, height = 200):
+	# Construtor.
+	def __init__(self, x, y, angle = 0, width = 50, height = 200, color = BLACK):
 		# Construtor do pai.
 		super().__init__()
 
-		# Carrega a imagem do arquivo.
-		# self.original_image, self.original_rect = load_image('wall.png', -1)
+		# Atributos da parede.
+		self.x = x
+		self.y = y
+		self.angle = angle
+		self.width = width
+		self.height = height
+		self.color = color
 		
-		# Cor de background transparente.
-		self.original_image = pygame.Surface([width, height])
-		self.original_image.fill(WHITE)
-		self.original_image.set_colorkey(WHITE)
- 		
-		# Desenhando o organismo (triangulo)
-		pygame.draw.polygon(self.original_image, color,  [[0, 0], [0, height],[width, height], [width, 0]], 0)
-		
-		# Retangulo com as mesmas dimensões da imagem.
-		self.rect = self.original_image.get_rect()
-		self.image = self.original_image # Original image é usado para as transformações
-
-
-		self.image = rot_center(self.original_image, -math.degrees(angle))
-
-		self.rect.move_ip(x, y)
-
-# Linhas que representam as bordas do espaço.
-class Line(pygame.sprite.Sprite):
-	# Contrutor
-	def __init__(self, size, p1, p2, x=0, y=0, wide=3):
-		# Construtor do pai.
-		super().__init__()
-
-		# Calculo da espessura da linha 
-		width = abs(p2[0] - p1[0]) if p2[0] - p1[0] != 0 else wide
-
-		height = abs(p2[1] - p1[1]) if p2[1] - p1[1] != 0 else wide
-		# Cor de background transparente.
-		self.image = pygame.Surface([width, height])
+		# Pintando a superfície.
+		self.image = pygame.Surface((width, height))
 		self.image.fill(WHITE)
 		self.image.set_colorkey(WHITE)
-	
-		# Desenhando a linha.
-		pygame.draw.line(self.image, BLACK, p1, p2, wide)
-	
-		# Retangulo com as mesmas dimensões da imagem.
+ 		
+		# Desenhando a parede.
+		pygame.draw.polygon(self.image, color, [(0, 0), (0, height),(width, height), (width, 0)], 0)
+
+		# Descomentar a linha de baixo quando arrumar a colisão com máscaras.
+		# self.image = pygame.transform.rotate(self.image, -math.degrees(angle))
 		self.rect = self.image.get_rect()
-		self.x = x
-		self.y = y
-		self.rect.move_ip(self.x, self.y)
+		self.rect.move_ip(x, y)
 
 # Chamada da main.
 if __name__ == "__main__":
