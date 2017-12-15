@@ -27,14 +27,15 @@ DEAD = -1
 ALIVE = 0
 WINNER = 1
 POPULATION_SIZE = 300
-ELITE_SIZE = 5
+CANDIDATES = 100
+ELITE_SIZE = 7
 MIN_MUTATION = 0.001
 MAX_MUTATION = 0.1
 MAX_TURN = 0.25
 STEP = 5
 
 MIN_ROLLBACK = 10
-MAX_ROLLBACK = 50
+MAX_ROLLBACK = 100
 
 # Posição da bolinha
 PELLET_X = 1300
@@ -46,7 +47,7 @@ INITIAL_X = 100
 INITIAL_Y = SCREEN_HEIGHT // 2
 
 CHANCE_TO_RESET_GENOME = 0.005
-CHANCE_TO_MUTATE_AT_DEATH = 0.25
+CHANCE_TO_MUTATE_AT_DEATH = 0.4
 
 # Cor de acordo com a taxa de mutação.
 def get_color(mutation):
@@ -82,9 +83,9 @@ class Main:
 
 		dead_organisms = {}
 		winner_organisms = {}
-		
+
 		# Desenha background.
-		self.screen.blit(self.background, (0, 0))
+		# self.screen.blit(self.background, (0, 0))
 
 		# GameLoop
 		while True:
@@ -92,6 +93,9 @@ class Main:
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					sys.exit()
+
+			# Desenha background.
+			self.screen.blit(self.background, (0, 0))
 			
 			# Verifica se acabou a geraçao atual (MAX_TURNS atingido ou todos organismos parados)
 			if self.turn == MAX_TURNS or len(dead_organisms) + len(winner_organisms) == POPULATION_SIZE:
@@ -105,6 +109,10 @@ class Main:
 
 				# Ordena decrescente pelo fitness
 				self.organism_list.sort(key=lambda x: x.fitness, reverse=True)
+
+				for i in range(5, ELITE_SIZE):
+					p = random.randint(ELITE_SIZE, CANDIDATES)
+					self.organism_list[i], self.organism_list[p] = self.organism_list[p], self.organism_list[i]
 
 				# Imprime a geração atual e o rank com os 10 melhores fitness.
 				print("Gen.: %d" % self.gen)
@@ -139,11 +147,19 @@ class Main:
 
 			for winner in winner_organisms:
 				winner.state = WINNER
-
-			   
+ 
 			# Desenha os sprites
 			self.pellet_sprites.draw(self.screen)
 			self.organism_sprites.draw(self.screen)
+
+			for i in range(ELITE_SIZE, POPULATION_SIZE):
+				org = self.organism_list[i]
+				pygame.draw.polygon(org.original_image, org.color, [(0, 0), (0, org.height), (org.width, org.height // 2)])
+
+			for i in range(ELITE_SIZE):
+				org = self.organism_list[i]
+				pygame.draw.polygon(org.original_image, (0, 215, 255), [(0, 0), (0, org.height), (org.width, org.height // 2)])
+
 			self.wall_sprites.draw(self.screen)
 			self.print_stuff()
 			pygame.display.flip()
@@ -157,6 +173,8 @@ class Main:
 		self.screen.blit(text, (10, 10))
 		text = font.render("Fitness: %.2f" % (self.organism_list[0].fitness), True, (0, 180, 0))
 		self.screen.blit(text, (10, 50))
+		text = font.render("Turn: %d" % (self.turn), True, (0, 180, 0))
+		self.screen.blit(text, (10, 90))
 
 	def LoadSprites(self):
 		# Gerando o objetivo.
@@ -190,18 +208,23 @@ class Main:
 		# Right border.
 		self.wall_sprites.add(Wall(SCREEN_WIDTH - BORDER_WIDTH, 0, 0, BORDER_WIDTH, SCREEN_HEIGHT, BLACK))
 
-		# Carrega os obstaculos
-		self.randomize_map()
+		# Mapa aleatorio
+		# self.randomize_map()
 
-		# self.wall_sprites.add(Wall(500, 0, 0, 50, 400))
-		# self.wall_sprites.add(Wall(500, SCREEN_HEIGHT - 400, 0, 50, 400))
+		# Mapa 1
+		self.map1()
 
-		# self.wall_sprites.add(Wall(700, 100, 0, 50, SCREEN_HEIGHT - 200))
+	def map1(self):
+		self.wall_sprites.add(Wall(500, 0, 0, 50, 400))
+		self.wall_sprites.add(Wall(500, SCREEN_HEIGHT - 400, 0, 50, 400))
 
-		# self.wall_sprites.add(Wall(900, 0, 0, 50, 400))
-		# self.wall_sprites.add(Wall(900, SCREEN_HEIGHT - 400, 0, 50, 400))
+		self.wall_sprites.add(Wall(700, 100, 0, 50, SCREEN_HEIGHT - 200))
 
-		# self.wall_sprites.add(Wall(1100, 100, 0, 50, SCREEN_HEIGHT - 200))
+		self.wall_sprites.add(Wall(900, 0, 0, 50, 400))
+		self.wall_sprites.add(Wall(900, SCREEN_HEIGHT - 400, 0, 50, 400))
+
+		self.wall_sprites.add(Wall(1100, 100, 0, 50, SCREEN_HEIGHT - 200))
+		
 
 	def randomize_map(self):
 		pos_x = [i for i in range(200, SCREEN_WIDTH + 1, 200)]
@@ -297,8 +320,8 @@ class Organism(pygame.sprite.Sprite):
 		else:
 			self.fitness -= 0.4 * self.dist
 			self.fitness -= 0.2 * self.min_dist
-			self.fitness += 0.2 * self.time_to_dist * (1 - self.dist / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y)))
-			self.fitness += 0.3 * self.dist_initial
+			self.fitness += 0.4 * self.time_to_dist * (self.dist_initial / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y)))
+			self.fitness += 0.2 * self.dist_initial
 
 	# Volta o organismo para a posição original, estado e angulo
 	def reset(self):
