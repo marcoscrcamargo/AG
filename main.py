@@ -27,14 +27,14 @@ DEAD = -1
 ALIVE = 0
 WINNER = 1
 POPULATION_SIZE = 300
-ELITE_SIZE = 10
+ELITE_SIZE = 5
 MIN_MUTATION = 0.001
 MAX_MUTATION = 0.1
 MAX_TURN = 0.25
 STEP = 5
 
 MIN_ROLLBACK = 10
-MAX_ROLLBACK = 100
+MAX_ROLLBACK = 50
 
 # Posição da bolinha
 PELLET_X = 1300
@@ -62,6 +62,7 @@ class Main:
 	def __init__(self):
 		# Inicializando a janela.
 		pygame.init()
+		pygame.font.init()
 		pygame.display.set_caption(SCREEN_TITLE)
 		self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
@@ -81,6 +82,9 @@ class Main:
 
 		dead_organisms = {}
 		winner_organisms = {}
+		
+		# Desenha background.
+		self.screen.blit(self.background, (0, 0))
 
 		# GameLoop
 		while True:
@@ -104,8 +108,6 @@ class Main:
 
 				# Imprime a geração atual e o rank com os 10 melhores fitness.
 				print("Gen.: %d" % self.gen)
-
-				self.print_stuff()
 
 				for i in range (0, 10):
 					print("\t%d) fitness = %.2f" % (i + 1, self.organism_list[i].fitness))
@@ -138,22 +140,23 @@ class Main:
 			for winner in winner_organisms:
 				winner.state = WINNER
 
-			# Desenha background.
-			self.screen.blit(self.background, (0, 0))
 			   
 			# Desenha os sprites
 			self.pellet_sprites.draw(self.screen)
 			self.organism_sprites.draw(self.screen)
 			self.wall_sprites.draw(self.screen)
+			self.print_stuff()
 			pygame.display.flip()
 
 			# Incremento do turno atual.
 			self.turn += 1
 
 	def print_stuff(self):
-		font = pygame.font.SysFont("comicsansms", 36)
-		text = font.render("Generation %d" % self.gen, True, (255, 0, 0))
-		self.screen.blit(text, (500, 500))
+		font = pygame.font.SysFont("Arial", 36)
+		text = font.render("Generation: %d" % (self.gen), True, (0, 180, 0))
+		self.screen.blit(text, (10, 10))
+		text = font.render("Fitness: %.2f" % (self.organism_list[0].fitness), True, (0, 180, 0))
+		self.screen.blit(text, (10, 50))
 
 	def LoadSprites(self):
 		# Gerando o objetivo.
