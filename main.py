@@ -8,6 +8,8 @@
 # 	- Pygame: sudo pip3 install pygame
 #
 # Para rodar: python3 main.py
+#
+# Altere as constantes globais SHOW_TRAIL e MAP! 
 
 #!/usr/bin/env python
 import sys, math, random, pygame
@@ -40,7 +42,7 @@ BORDER_WIDTH = 1
 # Parâmetros do AG.
 MAX_TURNS = 2000
 POPULATION_SIZE = 300
-CANDIDATES = 100
+CANDIDATES = 60
 ELITE_SIZE = 7
 MIN_MUTATION = 0.001
 MAX_MUTATION = 0.1
