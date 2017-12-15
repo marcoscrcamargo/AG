@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-
 import sys, math, random, pygame
+
+if not pygame.font: print("Warning, fonts disabled")
 
 # Cores.
 BLACK = (0, 0, 0)
@@ -12,31 +13,31 @@ PINK = (255, 0, 255)
 CYAN = (0, 255, 255)
 WHITE = (255, 255, 255)
 
-# Título da janela.
+# Constantes da janela.
 SCREEN_TITLE = "Path finder Genetic Algorithm"
-
-# Dimensões da janela.
 SCREEN_WIDTH = 1800
 SCREEN_HEIGHT = 1000
-
-# Grossura da borda da janela.
 BORDER_WIDTH = 1
 
 # Número máximo de turnos.
-MAX_TURNS = 1500
+MAX_TURNS = 2000
 
 # Constantes
 DEAD = -1
 ALIVE = 0
 WINNER = 1
-POPULATION_SIZE = 200
-ELITE_SIZE = 5
+POPULATION_SIZE = 300
+ELITE_SIZE = 10
 MIN_MUTATION = 0.001
 MAX_MUTATION = 0.1
 MAX_TURN = 0.25
+STEP = 5
+
+MIN_ROLLBACK = 10
+MAX_ROLLBACK = 100
 
 # Posição da bolinha
-PELLET_X = 1700
+PELLET_X = 1300
 PELLET_Y = SCREEN_HEIGHT // 2
 PELLET_RADIUS = 32
 
@@ -44,32 +45,24 @@ PELLET_RADIUS = 32
 INITIAL_X = 100
 INITIAL_Y = SCREEN_HEIGHT // 2
 
-CHANCE_TO_RESET_GENOME = 0.02
+CHANCE_TO_RESET_GENOME = 0.005
 CHANCE_TO_MUTATE_AT_DEATH = 0.25
-CHANCE_TO_MUTATE_AT_MIN_DIST = 0.25
-
-# FPS (acaba sendo limitado pelo poder de processamento do PC)
-FPS = 0 # 0 é pra ignorar
 
 # Cor de acordo com a taxa de mutação.
 def get_color(mutation):
 	return (((mutation - MIN_MUTATION) / (MAX_MUTATION - MIN_MUTATION)) * 255 , 0, 0)
-
+	
 # Cálculo da distância ao quadrado.
 def distance(p, q):
-	return (p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1])
+	return math.sqrt((p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]))
 
 # Classe principal
 class Main:
 	# Construtor, inicializa a tela
 	def __init__(self):
-		# Pygame init
+		# Inicializando a janela.
 		pygame.init()
-
-		# Definindo o título da janela.
 		pygame.display.set_caption(SCREEN_TITLE)
-
-		# Definindo as dimensões da janela.
 		self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 	def MainLoop(self):
@@ -84,7 +77,6 @@ class Main:
 		# Variaveis auxiliares
 		self.gen = 0
 		self.turn = 0 # Turno atual.
-		self.deads = 0 # Quantidade de organismos mortos.
 		clock = pygame.time.Clock() # Para controlar o FPS
 
 		dead_organisms = {}
@@ -111,9 +103,10 @@ class Main:
 				self.organism_list.sort(key=lambda x: x.fitness, reverse=True)
 
 				# Imprime a geração atual e o rank com os 10 melhores fitness.
-				print(distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y)))
-
 				print("Gen.: %d" % self.gen)
+
+				self.print_stuff()
+
 				for i in range (0, 10):
 					print("\t%d) fitness = %.2f" % (i + 1, self.organism_list[i].fitness))
 
@@ -157,9 +150,10 @@ class Main:
 			# Incremento do turno atual.
 			self.turn += 1
 
-			# FPS
-			if(FPS > 0):
-				clock.tick(FPS)
+	def print_stuff(self):
+		font = pygame.font.SysFont("comicsansms", 36)
+		text = font.render("Generation %d" % self.gen, True, (255, 0, 0))
+		self.screen.blit(text, (500, 500))
 
 	def LoadSprites(self):
 		# Gerando o objetivo.
@@ -194,20 +188,17 @@ class Main:
 		self.wall_sprites.add(Wall(SCREEN_WIDTH - BORDER_WIDTH, 0, 0, BORDER_WIDTH, SCREEN_HEIGHT, BLACK))
 
 		# Carrega os obstaculos
+		self.randomize_map()
 
-		# self.randomize_map()
+		# self.wall_sprites.add(Wall(500, 0, 0, 50, 400))
+		# self.wall_sprites.add(Wall(500, SCREEN_HEIGHT - 400, 0, 50, 400))
 
-		self.wall_sprites.add(Wall(300, 100, 0, 50, SCREEN_HEIGHT - 200))
+		# self.wall_sprites.add(Wall(700, 100, 0, 50, SCREEN_HEIGHT - 200))
 
-		self.wall_sprites.add(Wall(500, 0, 0, 50, 400))
-		self.wall_sprites.add(Wall(500, SCREEN_HEIGHT - 400, 0, 50, 400))
+		# self.wall_sprites.add(Wall(900, 0, 0, 50, 400))
+		# self.wall_sprites.add(Wall(900, SCREEN_HEIGHT - 400, 0, 50, 400))
 
-		self.wall_sprites.add(Wall(700, 100, 0, 50, SCREEN_HEIGHT - 200))
-
-		self.wall_sprites.add(Wall(900, 0, 0, 50, 400))
-		self.wall_sprites.add(Wall(900, SCREEN_HEIGHT - 400, 0, 50, 400))
-
-		self.wall_sprites.add(Wall(1100, 100, 0, 50, SCREEN_HEIGHT - 200))
+		# self.wall_sprites.add(Wall(1100, 100, 0, 50, SCREEN_HEIGHT - 200))
 
 	def randomize_map(self):
 		pos_x = [i for i in range(200, SCREEN_WIDTH + 1, 200)]
@@ -265,6 +256,7 @@ class Organism(pygame.sprite.Sprite):
 
 		# Métricas
 		self.dist = self.min_dist = distance((self.rect.x, self.rect.y), (PELLET_X, PELLET_Y))
+		self.dist_initial = 0
 		self.time_to_dist = self.time_to_min_dist = -1
 
 	# Funçao de movimento do organismo.
@@ -272,6 +264,7 @@ class Organism(pygame.sprite.Sprite):
 		if self.state == ALIVE:
 			# Atualizando a distância atual
 			self.dist = distance((self.rect.x, self.rect.y), (PELLET_X, PELLET_Y))
+			self.dist_initial = distance((self.rect.x, self.rect.y), (INITIAL_X, INITIAL_Y))
 			self.time_to_dist = turn
 
 			# Atualizando a distância mínima
@@ -283,8 +276,8 @@ class Organism(pygame.sprite.Sprite):
 			self.angle += self.genome[turn]
 
 			# Calculo do x,y
-			xMove = int(5 * math.cos(self.angle))
-			yMove = int(5 * math.sin(self.angle))
+			xMove = STEP * math.cos(self.angle)
+			yMove = STEP * math.sin(self.angle)
 
 			# Realiza movimento e a rotação do objeto.
 			self.rect.move_ip(xMove, yMove)
@@ -297,17 +290,12 @@ class Organism(pygame.sprite.Sprite):
 
 		# Bônus caso tenha alcançado o objetivo
 		if self.state == WINNER:
-			self.fitness *= (2 - self.time_to_min_dist / MAX_TURNS)
+			self.fitness *= (3 - self.time_to_min_dist / MAX_TURNS)
 		else:
-			a1 = 2
-			a2 = 3
-			a3 = 2
-
-			p1 = 1 - self.min_dist / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y))
-			p2 = 1 - self.dist / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y))
-			p3 = self.time_to_dist / MAX_TURNS
-
-			self.fitness *= (a1 * p1 + a2 * p2 + a3 * p3) / (a1 + a2 + a3)
+			self.fitness -= 0.4 * self.dist
+			self.fitness -= 0.2 * self.min_dist
+			self.fitness += 0.2 * self.time_to_dist * (1 - self.dist / distance((INITIAL_X, INITIAL_Y), (PELLET_X, PELLET_Y)))
+			self.fitness += 0.3 * self.dist_initial
 
 	# Volta o organismo para a posição original, estado e angulo
 	def reset(self):
@@ -317,24 +305,23 @@ class Organism(pygame.sprite.Sprite):
 
 	# Realiza o cruzamento entre dois organismos e salva no atual
 	def make_child(self, mom, dad):
-		if random.random() < CHANCE_TO_RESET_GENOME:
+		if random.random() < (1 + self.mutation) * CHANCE_TO_RESET_GENOME:
 			self.genome = [random.uniform(-MAX_TURN, MAX_TURN) for i in range(MAX_TURNS)]
 		else:
 			self.genome = [dad.genome[i] if random.random() < 0.5 else mom.genome[i] for i in range(MAX_TURNS)]
 
 			if random.random() < CHANCE_TO_MUTATE_AT_DEATH:
-				s = max(0, min(mom.time_to_dist, dad.time_to_dist) - 10)
-			elif random.random() < CHANCE_TO_MUTATE_AT_MIN_DIST:
-				s = max(0, max(mom.time_to_min_dist, dad.time_to_min_dist) - 10)
+				s = max(0, min(mom.time_to_dist, dad.time_to_dist) - random.randint(MIN_ROLLBACK, MAX_ROLLBACK))
 			else:
 				s = 0
 
 			# Mutação
 			for i in range(s, MAX_TURNS):
 				if random.random() < self.mutation * (1 + i / MAX_TURNS):
-					self.genome[i] += random.uniform(-MAX_TURN, MAX_TURN)
-					self.genome[i] = max(self.genome[i], -MAX_TURN)
-					self.genome[i] = min(self.genome[i], MAX_TURN)
+					if random.random() < 0.5:
+						self.genome[i] = random.uniform(-MAX_TURN, MAX_TURN)
+					else:
+						self.genome[i] = -self.genome[i]
 
 # Objetivo
 class Pellet(pygame.sprite.Sprite):
